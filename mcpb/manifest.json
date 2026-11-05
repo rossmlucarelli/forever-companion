@@ -1,0 +1,108 @@
+{
+  "manifest_version": "0.3",
+  "name": "forever-companion",
+  "display_name": "Forever Companion",
+  "version": "1.4.0",
+  "description": "A read-only coach for World of Warcraft: Forever. Knows your character from the Forever Companion addon, gives hints rather than routes, and helps with builds and gold.",
+  "long_description": "A read-only coach for World of Warcraft: Forever. It reads the snapshot the bundled Forever Companion addon saves in game, keeps each player's playstyle profile and each character's talent plan, and gives hints through a three-level ladder (nudge, direction, answer) that the connector controls. It installs and updates the addon itself, and never touches the running game. Location data from warcraft.wiki.gg (CC BY-SA).",
+  "author": {
+    "name": "Ross Lucarelli"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/server/index.js"
+      ],
+      "env": {
+        "FC_WOW_DIR": "${user_config.wow_folder}",
+        "FC_DATA_DIR": "${user_config.data_folder}",
+        "FC_USE_WIKI": "${user_config.use_wiki}",
+        "FC_CHECK_UPDATES": "${user_config.check_updates}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "get_character",
+      "description": "Your character's latest snapshot and reminders"
+    },
+    {
+      "name": "get_profile",
+      "description": "Your playstyle profile and character plan"
+    },
+    {
+      "name": "update_profile",
+      "description": "Change your profile, add notes or goals"
+    },
+    {
+      "name": "get_hint",
+      "description": "Hints, one level at a time"
+    },
+    {
+      "name": "save_my_hint",
+      "description": "Save a hint you've written yourself"
+    },
+    {
+      "name": "get_build_progress",
+      "description": "Talents against your locked-in plan"
+    },
+    {
+      "name": "set_talent_plan",
+      "description": "Save a talent plan from an Icy Veins Forever calculator link"
+    },
+    {
+      "name": "plan_gold",
+      "description": "Upcoming costs and whether a purchase fits"
+    },
+    {
+      "name": "companion_status",
+      "description": "Setup check"
+    }
+  ],
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin"
+    ],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "user_config": {
+    "wow_folder": {
+      "type": "directory",
+      "title": "WoW folder",
+      "description": "Your World of Warcraft folder (the one containing _forever_ or similar).",
+      "default": "C:\\Program Files (x86)\\World of Warcraft",
+      "required": true
+    },
+    "data_folder": {
+      "type": "directory",
+      "title": "Companion files",
+      "description": "Where your profile, hint progress and own hints are kept.",
+      "default": "${DOCUMENTS}/ForeverCompanion",
+      "required": false
+    },
+    "use_wiki": {
+      "type": "boolean",
+      "title": "Look up locations on warcraft.wiki.gg",
+      "description": "Needed for hints about places and NPCs outside your quest log.",
+      "default": true
+    },
+    "check_updates": {
+      "type": "boolean",
+      "title": "Check for updates",
+      "description": "Once a day, check GitHub for a newer version and let you know. Nothing installs without you.",
+      "default": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rossmlucarelli/forever-companion"
+  },
+  "homepage": "https://github.com/rossmlucarelli/forever-companion"
+}

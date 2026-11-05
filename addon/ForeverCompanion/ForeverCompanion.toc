@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: Forever Companion
+## Notes: Saves a snapshot of your character for the Forever Companion connector in Claude. Read-only: it never acts in the game.
+## Author: Ross Lucarelli
+## Version: 1.4.0
+## SavedVariables: ForeverCompanionDB
+
+Plan.lua
+ForeverCompanion.lua

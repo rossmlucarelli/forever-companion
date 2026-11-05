@@ -1,0 +1,8 @@
+<Bindings>
+  <Binding name="FOREVERCOMPANION_DING" header="FOREVERCOMPANION" category="ADDONS">
+    ForeverCompanion_Ding()
+  </Binding>
+  <Binding name="FOREVERCOMPANION_SYNC" category="ADDONS">
+    ForeverCompanion_Sync()
+  </Binding>
+</Bindings>
