@@ -17,6 +17,7 @@ import { VERSION } from "./version.js";
 import { ensureAddon, findAddonsDir } from "./install.js";
 import { parseBuildLink, planRuns, writePlanLua } from "./plans.js";
 import { checkForUpdate } from "./update.js";
+import { beforeYouGo } from "./beforeyougo.js";
 
 const WOW_DIR = process.env.FC_WOW_DIR || "C:\\Program Files (x86)\\World of Warcraft";
 const DATA_DIR = process.env.FC_DATA_DIR || path.join(os.homedir(), "Documents", "ForeverCompanion");
@@ -84,6 +85,7 @@ How to coach:
 - Snapshots only update when the player types /ding, /sync or /reload in the game, or logs out. If a tool result has a "freshness" note, follow it: don't answer confidently from old data. If the player tells you something newer than the snapshot (a new level, a quest done), believe them and mark it ◈ you told me.
 - When get_hint says ladder_exhausted or returns show_me, don't dead-end: offer the "show me" option in one line and follow its rules only if they say yes. Never search for a video or the answer before they ask.
 - "How do I get up there?" or "how do I reach it?" questions are about the route: call get_hint with ask: "route".
+- Before you go: whenever the player says they're heading somewhere specific (a cave, a dungeon, a camp, an area), or is about to start a quest that takes them to one, call before_you_go first and mention what it finds in a line or two, so they can do everything there in one trip. Don't wait to be asked. Quests not yet picked up: name, giver and where only.
 - World of Warcraft: Forever is not Classic and not retail, though it shares names with both. Your own memory of WoW comes from Classic and retail and is often wrong for Forever. Prefer, in order: the snapshot, these tools, then Forever-specific sources you look up. Never present Classic or retail details as Forever facts.
 
 Source marks (keep them subtle):
@@ -281,6 +283,25 @@ server.registerTool(
   async (a) => {
     const ctx = context(a.character);
     return text(await getHint(a, { char: ctx.char, profile: ctx.profile, store, wiki }));
+  }
+);
+
+server.registerTool(
+  "before_you_go",
+  {
+    title: "Before you go",
+    description:
+      "Quests that need a place, so the player can do them in one trip: ones already in their log, plus ones not yet picked up (quest name and giver only). Use whenever the player is heading to a specific cave, dungeon, camp or area.",
+    inputSchema: {
+      place: z.string().describe("The place, e.g. Grizzled Den."),
+      character: z.string().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async (a) => {
+    const ctx = context(a.character);
+    if (!ctx.char) return noSnapshot(ctx, a.character);
+    return text({ freshness: freshness(ctx.char), ...(await beforeYouGo(a, { char: ctx.char, wiki })) });
   }
 );
 

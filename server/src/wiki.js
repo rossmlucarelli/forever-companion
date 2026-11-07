@@ -39,6 +39,27 @@ export class Wiki {
     return (d?.query?.search || []).map((r) => r.title);
   }
 
+  // Content of up to `limit` pages mentioning the phrase, in a single request.
+  async pagesMentioning(phrase, limit = 30) {
+    const d = await this.get({
+      action: "query",
+      generator: "search",
+      gsrsearch: `"${phrase}"`,
+      gsrlimit: String(limit),
+      prop: "revisions",
+      rvprop: "content",
+      rvslots: "main",
+    });
+    return (d?.query?.pages || []).map((p) => ({ title: p.title, text: p.revisions?.[0]?.slots?.main?.content || "" }));
+  }
+
+  // Content of several known pages in a single request.
+  async pages(titles) {
+    if (!titles.length) return [];
+    const d = await this.get({ action: "query", titles: titles.slice(0, 40).join("|"), prop: "revisions", rvprop: "content", rvslots: "main", redirects: "1" });
+    return (d?.query?.pages || []).map((p) => ({ title: p.title, text: p.revisions?.[0]?.slots?.main?.content || "" }));
+  }
+
   async wikitext(title) {
     const d = await this.get({ action: "parse", page: title, prop: "wikitext", redirects: "1" });
     return { title: d?.parse?.title || title, text: d?.parse?.wikitext || "" };

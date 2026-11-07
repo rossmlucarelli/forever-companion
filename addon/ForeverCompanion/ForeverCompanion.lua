@@ -5,7 +5,7 @@
 -- to its SavedVariables file when you log out or type /reload.
 
 local ADDON = ...
-local VERSION = "1.5.0"
+local VERSION = "1.6.0"
 
 ForeverCompanionDB = ForeverCompanionDB or {}
 
@@ -481,6 +481,15 @@ local function quests(s)
     if previous then try(SelectQuestLogEntry, previous) end
   end
   s.quests = out
+
+  -- Quests already completed, so "Before you go" doesn't suggest them again.
+  local done = {}
+  if C_QuestLog and C_QuestLog.GetAllCompletedQuestIDs then
+    for _, id in ipairs(try(C_QuestLog.GetAllCompletedQuestIDs) or {}) do table.insert(done, id) end
+  elseif GetQuestsCompleted then
+    for id in pairs(try(GetQuestsCompleted) or {}) do table.insert(done, id) end
+  end
+  s.completedQuests = done
 end
 
 local function apiCheck(s)
@@ -548,7 +557,7 @@ local function snapshot(reason, force)
   if type(prev) == "table" and prev.name == s.name then
     local kept = {}
     local function empty(v) return v == nil or (type(v) == "table" and next(v) == nil) end
-    for _, k in ipairs({ "gear", "bags", "skills", "talents", "spells", "reputations", "quests" }) do
+    for _, k in ipairs({ "gear", "bags", "skills", "talents", "spells", "reputations", "quests", "completedQuests" }) do
       if empty(s[k]) and not empty(prev[k]) then s[k] = prev[k]; table.insert(kept, k) end
     end
     if empty(s.talents and s.talents[1] and s.talents[1].talents) and not empty(prev.talents) then

@@ -10,6 +10,7 @@ It never touches the running game. An in-game addon saves a snapshot of your cha
 - **Learns how you play.** A short chat on first use: solo or groups, steady damage or bursts, how you get on with long cooldowns, how much help you want. Every suggestion fits that.
 - **Hints, not routes.** Ask where something is and you get a nudge first. Ask for "a bit more" and it moves one step: nudge, then direction, then answer. In Forever's new zones, discovery mode stops at direction unless you switch it off.
 - **Talent plans.** Paste a build link from the [Icy Veins WoW Forever talent calculator](https://www.icy-veins.com/wow-forever/priest-talent-calculator), picked in the order you'll take the talents. Type `/ding` in game when you level and it tells you the next one, and why.
+- **Before you go.** Say where you're heading and it lists the quests that need that place, including ones you haven't picked up yet (just the name and who gives it), so you do everything in one trip.
 - **Gold planner.** Warns you before a purchase leaves you short for riding at 40, or anything else you're saving for.
 - **Every character, separately.** Each gets its own plan and goals; your playstyle and the hints you save are shared.
 - **Honest about sources.** Facts carry a small mark: ◆ your game · ◈ you told me · ◇ looked up · ○ unconfirmed for Forever. Forever shares names with Classic and retail, so this matters.
@@ -47,6 +48,7 @@ If Windows won't let it write to the game folder, unzip `ForeverCompanion-addon.
 - *"Where do I find the camp for this quest?"* … *"a bit more?"*
 - *"How do I get up there?"* — route hints from ones you've saved
 - *"Show me"* — once the hints run out, one Forever video, only if you ask
+- *"I'm heading into the Grizzled Den"* — before you go
 - *"Should I buy this for 30 gold?"*
 - *"Here's my talent build:"* followed by your calculator link
 
