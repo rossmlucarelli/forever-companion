@@ -5,7 +5,7 @@
 -- to its SavedVariables file when you log out or type /reload.
 
 local ADDON = ...
-local VERSION = "1.4.0"
+local VERSION = "1.5.0"
 
 ForeverCompanionDB = ForeverCompanionDB or {}
 
@@ -107,9 +107,66 @@ local function location(s)
   s.location = loc
 end
 
+-- Forever uses the newer talent system (C_ClassTalents / C_Traits), not
+-- Classic's GetTalentInfo. Reads every visible talent with its rank, plus
+-- unspent points. Returns nil if the system isn't there or isn't ready.
+local function readTraits()
+  if not (C_ClassTalents and C_Traits and C_ClassTalents.GetActiveConfigID) then return nil end
+  local configID = try(C_ClassTalents.GetActiveConfigID)
+  if not configID then return { list = {}, diag = { configID = "none (normal below level 10)" } } end
+  local config = try(C_Traits.GetConfigInfo, configID)
+  local treeIDs = type(config) == "table" and config.treeIDs or {}
+  local list, seen, nodes, unspent = {}, {}, 0, nil
+  for _, treeID in ipairs(treeIDs) do
+    local cur = try(C_Traits.GetTreeCurrencyInfo, configID, treeID, false)
+    if type(cur) == "table" and type(cur[1]) == "table" and unspent == nil then
+      unspent = clean(cur[1].quantity)
+    end
+    for _, nodeID in ipairs(try(C_Traits.GetTreeNodes, treeID) or {}) do
+      nodes = nodes + 1
+      local node = try(C_Traits.GetNodeInfo, configID, nodeID)
+      if type(node) == "table" and node.isVisible ~= false then
+        local entryID = (type(node.activeEntry) == "table" and node.activeEntry.entryID)
+          or (type(node.entryIDs) == "table" and node.entryIDs[1])
+        local entry = entryID and try(C_Traits.GetEntryInfo, configID, entryID)
+        local def = type(entry) == "table" and entry.definitionID and try(C_Traits.GetDefinitionInfo, entry.definitionID)
+        local name
+        if type(def) == "table" then
+          name = clean(def.overrideName)
+          if (not name or name == "") and def.spellID then
+            name = (C_Spell and C_Spell.GetSpellName and try(C_Spell.GetSpellName, def.spellID))
+              or (GetSpellInfo and try(GetSpellInfo, def.spellID))
+            name = clean(name)
+          end
+        end
+        if name and name ~= "" and not seen[name] then
+          seen[name] = true
+          local rank = tonumber(node.currentRank or node.activeRank or node.ranksPurchased) or 0
+          table.insert(list, { name = name, rank = rank, maxRank = clean(node.maxRanks) })
+        end
+      end
+    end
+  end
+  local sample = {}
+  for i = 1, math.min(3, #list) do sample[i] = list[i].name end
+  return { list = list, unspent = unspent, diag = { configID = configID, trees = #treeIDs, nodes = nodes, named = #list, unspent = unspent, sample = sample } }
+end
+
 local function talents(s)
   local trees = {}
   local numTabs = try(GetNumTalentTabs) or 0
+  if numTabs == 0 then
+    local t = readTraits()
+    if t then
+      local spent = 0
+      for _, x in ipairs(t.list) do spent = spent + (x.rank or 0) end
+      s.talents = { { name = "Talents", talents = t.list, spent = spent } }
+      s.talentSource = "traits"
+      s.unspentTalentPoints = t.unspent
+      s.traitsCheck = t.diag
+      return
+    end
+  end
   for tab = 1, numTabs do
     local tree = { talents = {}, spent = 0 }
     -- GetTalentTabInfo has changed shape between versions, so take the
@@ -376,7 +433,7 @@ local function quests(s)
         elseif info.questID and not info.isHidden then
           local q = {
             questID = clean(info.questID), title = clean(info.title),
-            level = clean(info.level), zoneHeader = header,
+            level = (tonumber(info.level) or 0) > 0 and clean(info.level) or nil, zoneHeader = header,
             complete = (try(C_QuestLog.IsComplete, info.questID)) and true or false,
             objectives = {},
           }
@@ -437,6 +494,9 @@ local function apiCheck(s)
   a.GetNextWaypoint = (C_QuestLog and C_QuestLog.GetNextWaypoint) and "present" or "missing"
   a.GetQuestsOnMap = (C_QuestLog and C_QuestLog.GetQuestsOnMap) and "present" or "missing"
   a.QuestPOIGetIconInfo = QuestPOIGetIconInfo and "present" or "missing"
+  a.GetProfessions = GetProfessions and "present" or "missing"
+  a.traits = s.traitsCheck
+  a.keptFromEarlier = s.kept
   local pins = 0
   for _ in pairs(mapPins) do pins = pins + 1 end
   a.mapPinsFound = pins
@@ -480,6 +540,45 @@ local function snapshot(reason, force)
     if not ok then s.partial = true end
   end
   if not s.name then return false end
+
+  -- Never save a worse snapshot over a better one. When logging out or
+  -- reloading, the game may already have cleared gear, bags and the like;
+  -- keep what the last good snapshot had for anything that came back empty.
+  local prev = ForeverCompanionDB.characters and ForeverCompanionDB.characters[charKey()]
+  if type(prev) == "table" and prev.name == s.name then
+    local kept = {}
+    local function empty(v) return v == nil or (type(v) == "table" and next(v) == nil) end
+    for _, k in ipairs({ "gear", "bags", "skills", "talents", "spells", "reputations", "quests" }) do
+      if empty(s[k]) and not empty(prev[k]) then s[k] = prev[k]; table.insert(kept, k) end
+    end
+    if empty(s.talents and s.talents[1] and s.talents[1].talents) and not empty(prev.talents) then
+      s.talents = prev.talents; s.talentSource = prev.talentSource; table.insert(kept, "talents")
+    end
+    if (s.money or 0) == 0 and (prev.money or 0) > 0 and (reason == "logout" or reason == "sync") then
+      s.money = prev.money; table.insert(kept, "money")
+    end
+    if s.bags == prev.bags then s.freeBagSlots = prev.freeBagSlots end
+    if s.xp == nil and prev.xp then s.xp, s.xpMax = prev.xp, prev.xpMax end
+    if type(s.location) == "table" and not s.location.zone and type(prev.location) == "table" then
+      s.location = prev.location; table.insert(kept, "location")
+    end
+    -- Quests: fill in text and levels that came back blank.
+    if type(s.quests) == "table" and type(prev.quests) == "table" and s.quests ~= prev.quests then
+      local old = {}
+      for _, q in ipairs(prev.quests) do if q.questID then old[q.questID] = q end end
+      for _, q in ipairs(s.quests) do
+        local o = q.questID and old[q.questID]
+        if o then
+          q.description = q.description or o.description
+          q.objectiveText = q.objectiveText or o.objectiveText
+          q.level = q.level or o.level
+          if empty(q.objectives) then q.objectives = o.objectives end
+        end
+      end
+    end
+    if #kept > 0 then s.kept = kept end
+    if s.api then s.api.keptFromEarlier = s.kept end
+  end
 
   ForeverCompanionDB.version = 1
   ForeverCompanionDB.characters = ForeverCompanionDB.characters or {}
@@ -562,6 +661,13 @@ local function currentRanks()
       end
     end
   end
+  if not found then
+    local t = readTraits()
+    if t and #t.list > 0 then
+      for _, x in ipairs(t.list) do ranks[x.name] = x.rank or 0 end
+      found = true
+    end
+  end
   return found and ranks or nil
 end
 
@@ -601,7 +707,12 @@ local function ding()
   end
 
   local ranks = currentRanks()
-  local unspent = tonumber(try(UnitCharacterPoints, "player") or try(GetUnspentTalentPoints)) or 0
+  local unspent = tonumber(try(UnitCharacterPoints, "player") or try(GetUnspentTalentPoints))
+  if unspent == nil then
+    local t = readTraits()
+    unspent = t and tonumber(t.unspent) or nil
+  end
+  unspent = unspent or 0
   local todo = remainingPoints(plan, ranks, level)
 
   out(" ")

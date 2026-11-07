@@ -38,13 +38,14 @@ export function summarise(char, charProfile) {
     gear: asArray(char.gear).filter((g) => g.slot !== "Shirt" && g.slot !== "Tabard").map((g) => `${g.slot}: ${g.name}`),
     professions_and_skills: asArray(char.skills).map((s) => `${s.name} ${s.rank}/${s.maxRank}`),
     knows_riding: !!char.knowsRiding,
-    quests: quests.map((q) => `${q.title} (level ${q.level})${q.complete ? " — ready to hand in" : ""}`),
+    quests: quests.map((q) => `${q.title}${q.level ? ` (level ${q.level})` : ""}${q.complete ? " — ready to hand in" : ""}`),
     bag_space_free: char.freeBagSlots ?? null,
     bags: asArray(char.bags).map((b) => `${b.name} x${b.count}`),
     reputations: asArray(char.reputations)
       .filter((r) => !/Neutral/i.test(String(r.standing)))
       .map((r) => `${r.name}: ${r.standing}`),
     partial_snapshot: !!char.partial,
+    kept_from_earlier_snapshot: char.kept ? asArray(char.kept) : undefined,
   };
 }
 

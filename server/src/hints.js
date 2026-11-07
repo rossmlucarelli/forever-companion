@@ -55,11 +55,18 @@ async function resolve({ kind, target, questId }, char, wiki) {
       }
       facts.textOrigin = "game";
       facts.locationOrigin = facts.zone ? "game" : null;
-      if (q.waypoint && q.waypoint.x != null) {
-        if (isZone(q.waypoint.mapName)) facts.zone = q.waypoint.mapName;
-        facts.coords = { x: q.waypoint.x, y: q.waypoint.y };
-        facts.sources.push("the game's own quest marker");
+      // The game's "next waypoint" can point at the hand-in even while objectives
+      // remain (Stocking Jetsteam), so only trust it once the quest is complete.
+      // A map pin marks the objective area itself, so it's fine either way.
+      const wp = q.waypoint;
+      const pinIsObjective = wp && wp.source === "map pin";
+      if (wp && wp.x != null && (q.complete || pinIsObjective)) {
+        if (isZone(wp.mapName)) facts.zone = wp.mapName;
+        facts.coords = { x: wp.x, y: wp.y };
+        facts.sources.push(q.complete ? "the game's own quest marker (hand-in)" : "the game's own map pin");
         facts.locationOrigin = "game";
+      } else if (wp && wp.x != null) {
+        facts.markerIgnored = "The game's quest marker for this quest may point to where it's handed in, not the objective, so it isn't used until the quest is complete.";
       }
       if (!facts.coords && facts.complete && wiki) {
         try {
@@ -115,6 +122,23 @@ async function resolve({ kind, target, questId }, char, wiki) {
         });
         facts.locationOrigin = facts.textOrigin = page.mentionsForever ? "looked_up" : "looked_up_classic";
         facts.sources.push(page.url);
+        // Items: who sells it, preferring a vendor in a zone this character knows.
+        if (kind === "item" && page.vendors?.length) {
+          const known = new Set([char?.location?.zone, ...(char?.visitedZones || [])].filter(Boolean).map(norm));
+          const v = page.vendors.find((x) => known.has(norm(x.zone))) || page.vendors[0];
+          facts.vendor = v;
+          facts.otherVendors = page.vendors.filter((x) => x !== v).map((x) => `${x.name}${x.zone ? ` (${x.zone})` : ""}`);
+          facts.zone = v.zone || facts.zone;
+          try {
+            const npc = await wiki.lookup(v.name, "npc");
+            if (npc) {
+              facts.subzone = npc.subzone || facts.subzone;
+              facts.coords = npc.coords || facts.coords;
+              if (npc.zone) facts.zone = npc.zone;
+              facts.sources.push(npc.url);
+            }
+          } catch {}
+        }
       }
     } catch (e) {
       facts.wikiError = e.message;
@@ -157,7 +181,7 @@ export async function getHint(args, ctx) {
 
   const isNewZone = NEW_ZONES.some((z) => norm(z) === norm(facts.zone));
   const discovery = profile.player?.discovery_mode !== false && isNewZone && !args.override_discovery_mode;
-  const hasAnswer = !!(facts.coords || facts.subzone || own?.["3"]);
+  const hasAnswer = !!(facts.coords || facts.subzone || facts.vendor || own?.["3"]);
   let maxLevel = discovery ? 2 : 3;
   if (!hasAnswer && !facts.zone && !own) maxLevel = 1;
   else if (!hasAnswer) maxLevel = Math.min(maxLevel, 2);
@@ -193,10 +217,13 @@ export async function getHint(args, ctx) {
     if (facts.turnInNpcRole) clue.who_to_return_to = facts.turnInNpcRole;
     if (facts.affiliation) clue.affiliation = facts.affiliation;
     if (facts.complete) clue.status = "All objectives are done; it's ready to hand in.";
+    if (facts.vendor) clue.how_to_get_it = `It's sold by ${facts.vendor.title ? aOrAn(facts.vendor.title) : "a vendor"}. Don't name them yet.`;
     out.clue = Object.keys(clue).length ? clue : { note: "Nothing beyond the name is known. Give a gentle, general nudge (who in the world might know), or say it isn't documented yet." };
   } else if (level === 2) {
     const dir = {};
     if (facts.zone) dir.zone = facts.zone;
+    if (facts.vendor) dir.sold_by = `${facts.vendor.title ? aOrAn(facts.vendor.title) : "a vendor"}${facts.vendor.zone ? ` in ${facts.vendor.zone}` : ""}`;
+    if (facts.markerIgnored) dir.marker_note = facts.markerIgnored;
     if (facts.filedUnder) dir.quest_filed_under = `${facts.filedUnder} (the game's quest-log heading: where the quest belongs, not necessarily where to go)`;
     if (facts.subzone && visitedSubzone(char, facts.zone, facts.subzone)) dir.known_landmark = facts.subzone;
     else if (facts.subzone) dir.note = "The exact area is somewhere this character hasn't been yet, so don't name it.";
@@ -211,6 +238,7 @@ export async function getHint(args, ctx) {
     out.direction = dir;
   } else {
     out.answer = {
+      ...(facts.vendor ? { sold_by: facts.vendor.name, also_sold_by: facts.otherVendors?.length ? facts.otherVendors : undefined } : {}),
       zone: facts.zone,
       area: facts.subzone || null,
       coordinates: facts.coords ? `${facts.coords.x}, ${facts.coords.y}` : null,
@@ -227,7 +255,7 @@ export async function getHint(args, ctx) {
   out.sources = facts.sources;
 
   // Dead end: the ladder has nothing more to give.
-  const emptyAnswer = out.answer && !out.answer.zone && !out.answer.area && !out.answer.coordinates;
+  const emptyAnswer = out.answer && !out.answer.zone && !out.answer.area && !out.answer.coordinates && !out.answer.sold_by;
   if (level >= maxLevel && (maxLevel < 3 || emptyAnswer)) {
     out.ladder_exhausted = true;
     out.show_me = out.discovery_mode_cap
@@ -245,6 +273,8 @@ export async function getHint(args, ctx) {
       : "This is the most the ladder gives for this. Share it plainly.";
   return out;
 }
+
+const aOrAn = (w) => (/^[aeiou]/i.test(String(w)) ? `an ${w}` : `a ${w}`);
 
 const SHOW_ME = {
   available: true,

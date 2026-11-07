@@ -89,6 +89,7 @@ export function plain(s) {
   if (!s) return "";
   return s
     .replace(/\{\{[Cc]oords?\|[^}]*\}\}/g, "")
+    .replace(/\{\{\s*npc\s*\|([^}]*)\}\}/gi, (_, a) => npcTemplate(a).name || "")
     .replace(/\{\{[^{}]*\}\}/g, "")
     .replace(/\[\[(?:[^|\]]*\|)?([^\]]*)\]\]/g, "$1")
     .replace(/'''?/g, "")
@@ -157,7 +158,41 @@ export function extractFacts(text) {
     questStart: plain(param(text, ["start", "starts", "begins"])) || null,
     questEnd: plain(param(text, ["end", "ends", "finish"])) || null,
     level: plain(param(text, ["level"])) || null,
+    vendors: vendorsFrom(text),
   };
+}
+
+// {{npc|faction|Name|Title}} or {{npc||Name|Title}} → { name, title }
+export function npcTemplate(args) {
+  const parts = String(args).split("|").map((p) => p.trim());
+  const named = parts.filter((p) => p && !/=/.test(p));
+  const looksFaction = (p) => /^(a|h|alliance|horde|n|neutral|combat|mixed)$/i.test(p);
+  let rest = parts;
+  if (parts.length > 1 && (parts[0] === "" || looksFaction(parts[0]))) rest = parts.slice(1);
+  const name = (rest[0] || named[0] || "").replace(/^\[\[|\]\]$/g, "");
+  return { name: name || null, title: rest[1] || null };
+}
+
+// Who sells an item: the list after "purchased"/"sold by"/"bought" on item pages.
+export function vendorsFrom(text) {
+  const m = /(purchased|sold by|bought|available from|sells? it)[^\n]*\n?((?:[ \t]*\*[^\n]*\n?)+)?/i.exec(text);
+  if (!m) return [];
+  const lines = (m[2] || m[0]).split("\n").filter((l) => /\{\{\s*npc|\[\[/i.test(l));
+  const out = [];
+  for (const line of lines) {
+    let name = null;
+    let title = null;
+    const t = /\{\{\s*npc\s*\|([^}]*)\}\}/i.exec(line);
+    if (t) ({ name, title } = npcTemplate(t[1]));
+    else {
+      const links = [...line.matchAll(/\[\[(?:[^|\]]*\|)?([^\]]*)\]\]/g)].map((x) => x[1]);
+      name = links.find((l) => !isZone(l)) || null;
+      title = /<([^<>]+)>|&lt;(.+?)&gt;/.exec(line)?.slice(1).find(Boolean) || null;
+    }
+    const zone = [...line.matchAll(/\[\[(?:[^|\]]*\|)?([^\]]*)\]\]/g)].map((x) => x[1]).find((l) => isZone(l)) || null;
+    if (name) out.push({ name, title, zone });
+  }
+  return out.slice(0, 8);
 }
 
 // Finds the first Classic or Forever zone named in a Locations section (or,

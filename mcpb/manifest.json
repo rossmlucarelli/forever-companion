@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "forever-companion",
   "display_name": "Forever Companion",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "A read-only coach for World of Warcraft: Forever. Knows your character from the Forever Companion addon, gives hints rather than routes, and helps with builds and gold.",
   "long_description": "A read-only coach for World of Warcraft: Forever. It reads the snapshot the bundled Forever Companion addon saves in game, keeps each player's playstyle profile and each character's talent plan, and gives hints through a three-level ladder (nudge, direction, answer) that the connector controls. It installs and updates the addon itself, and never touches the running game. Location data from warcraft.wiki.gg (CC BY-SA).",
   "author": {
