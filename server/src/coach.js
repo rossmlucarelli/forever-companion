@@ -6,6 +6,7 @@ const norm = (s) => String(s || "").trim().toLowerCase();
 
 export function freshness(char) {
   const mins = Math.round((Date.now() / 1000 - (char.savedAt || 0)) / 60);
+  if (char.reason === "shutdown") return `Saved when the server announced a restart, ${snapshotAge(char.savedAt)}. Tell the player it's from just before the restart.`;
   if (mins < 20) return null;
   return `This snapshot was taken ${snapshotAge(char.savedAt)}. If they've played since, say so briefly and ask what's changed, or suggest /sync (or /ding if they've levelled). Anything they tell you that's newer wins over the snapshot: mark it ${LABELS.told}.`;
 }
@@ -44,9 +45,32 @@ export function summarise(char, charProfile) {
     reputations: asArray(char.reputations)
       .filter((r) => !/Neutral/i.test(String(r.standing)))
       .map((r) => `${r.name}: ${r.standing}`),
+    events: upcomingEvents(char),
     partial_snapshot: !!char.partial,
     kept_from_earlier_snapshot: char.kept ? asArray(char.kept) : undefined,
   };
+}
+
+// Events from the in-game calendar that are on now or start within 7 days,
+// with anything in the bags or quest log that looks related.
+export function upcomingEvents(char) {
+  const events = asArray(char.events);
+  if (!events.length) return undefined;
+  const now = Date.now();
+  const parse = (s) => (s ? Date.parse(s.replace(" ", "T")) : NaN);
+  const things = [...asArray(char.bags).map((b) => b.name), ...asArray(char.quests).map((q) => q.title)].filter(Boolean);
+  const out = [];
+  for (const e of events) {
+    const start = parse(e.starts);
+    const end = parse(e.ends);
+    const on = start <= now && (isNaN(end) || end >= now);
+    const soon = start > now && start - now < 7 * 864e5;
+    if (!on && !soon) continue;
+    const words = String(e.title).toLowerCase().split(/\W+/).filter((w) => w.length > 3);
+    const related = things.filter((t) => words.some((w) => t.toLowerCase().includes(w)));
+    out.push({ event: e.title, when: on ? `on now, until ${e.ends}` : `starts ${e.starts}`, related: related.length ? related : undefined });
+  }
+  return out.length ? out : undefined;
 }
 
 export function reminders(char, charProfile) {

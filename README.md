@@ -11,6 +11,7 @@ It never touches the running game. An in-game addon saves a snapshot of your cha
 - **Hints, not routes.** Ask where something is and you get a nudge first. Ask for "a bit more" and it moves one step: nudge, then direction, then answer. In Forever's new zones, discovery mode stops at direction unless you switch it off.
 - **Talent plans.** Paste a build link from the [Icy Veins WoW Forever talent calculator](https://www.icy-veins.com/wow-forever/priest-talent-calculator), picked in the order you'll take the talents. Type `/ding` in game when you level and it tells you the next one, and why.
 - **Before you go.** Say where you're heading and it lists the quests that need that place, including ones you haven't picked up yet (just the name and who gives it), so you do everything in one trip.
+- **Events.** Reads your in-game calendar and mentions events like the Darkmoon Faire when they're close, especially if you're carrying something for them. Saves automatically when the server announces a restart.
 - **Gold planner.** Warns you before a purchase leaves you short for riding at 40, or anything else you're saving for.
 - **Every character, separately.** Each gets its own plan and goals; your playstyle and the hints you save are shared.
 - **Honest about sources.** Facts carry a small mark: ◆ your game · ◈ you told me · ◇ looked up · ○ unconfirmed for Forever. Forever shares names with Classic and retail, so this matters.
@@ -57,6 +58,12 @@ If Windows won't let it write to the game folder, unzip `ForeverCompanion-addon.
 - Everything stays on your computer: your profile, hints and snapshots live in `Documents\ForeverCompanion` as plain files you can read and edit.
 - The only things it fetches are page lookups on [warcraft.wiki.gg](https://warcraft.wiki.gg) and a daily update check against this repository's releases. Both can be switched off in the connector's settings.
 - The addon only reads what the game's own addon interface offers, never reads anything in combat, and never acts in the game: no automation, no chat, no auction house.
+
+## Problems and upvotes
+
+If something goes wrong, tell Claude. It checks the [open issues](https://github.com/rossmlucarelli/forever-companion/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc) first: if your problem's already there, it gives you the link so you can add a 👍. If it's new, it can draft a report with the version details filled in, for you to check and submit. It never posts anything itself.
+
+Fixes are picked by 👍, so voting on the problems that affect you is the best way to get them fixed. Differences between Forever and Classic on the wiki aren't bugs: Claude saves what you found as your own notes and hints instead.
 
 ## Known limits
 

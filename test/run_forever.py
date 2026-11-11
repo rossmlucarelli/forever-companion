@@ -18,6 +18,16 @@ C_Traits = {
   GetEntryInfo = function(_, id) return { definitionID = id } end,
   GetDefinitionInfo = function(id) return { spellID = 1000 + id } end,
 }
+C_DateAndTime = { GetCurrentCalendarTime = function() return { year = 2026, month = 11, monthDay = 11, hour = 2, minute = 30 } end }
+C_Calendar = {
+  SetAbsMonth = function() end, OpenCalendar = function() end,
+  GetMonthInfo = function() return { numDays = 30 } end,
+  GetNumDayEvents = function(mo, d) if mo == 0 and d == 13 then return 1 end return 0 end,
+  GetDayEvent = function() return { title = "Darkmoon Faire", calendarType = "HOLIDAY",
+    startTime = { year = 2026, month = 11, monthDay = 13, hour = 0, minute = 1 }, endTime = { year = 2026, month = 11, monthDay = 19, hour = 23, minute = 59 } } end,
+}
+local realComplete = C_QuestLog.IsComplete
+C_QuestLog.IsComplete = function(...) if LOGGED_OUT then return false end return true end
 C_Spell = { GetSpellName = function(id) return defs[id - 1000] end }
 function GetBuildInfo() return "1.60.1", "1", "", 16001 end
 local realLink, realMoney, realInfo = GetInventoryItemLink, GetMoney, C_QuestLog.GetInfo
@@ -47,3 +57,12 @@ print("traits check:", dict(s.api.traits))
 g.LOGGED_OUT = False
 print("\n/ding at level 10 with the newer talent system:")
 g.SlashCmdList.FOREVERCOMPANIONDING()
+
+print("events:", [dict(e) for e in snap().events.values()])
+q = list(snap().quests.values())[0]
+print("quest still ready to hand in after logout:", q.complete)
+print("\nserver restart warning:")
+g.ForeverCompanionDB.characters = None
+h.event(None, "CHAT_MSG_SYSTEM", "Server restart in 15:00")
+print("saved on warning:", snap().reason)
+h.event(None, "CHAT_MSG_SYSTEM", "Guild message of the day: hello")

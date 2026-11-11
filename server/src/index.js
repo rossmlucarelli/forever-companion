@@ -13,11 +13,12 @@ import { Wiki } from "./wiki.js";
 import { getHint, saveOwnHint } from "./hints.js";
 import { summarise, reminders, buildProgress, planGold, freshness } from "./coach.js";
 import { newCharacter } from "./defaults.js";
-import { VERSION } from "./version.js";
+import { VERSION, REPO as REPO_SLUG } from "./version.js";
 import { ensureAddon, findAddonsDir } from "./install.js";
 import { parseBuildLink, planRuns, writePlanLua } from "./plans.js";
 import { checkForUpdate } from "./update.js";
 import { beforeYouGo } from "./beforeyougo.js";
+import { topIssues, searchIssues, reportLink, diagnostics } from "./issues.js";
 
 const WOW_DIR = process.env.FC_WOW_DIR || "C:\\Program Files (x86)\\World of Warcraft";
 const DATA_DIR = process.env.FC_DATA_DIR || path.join(os.homedir(), "Documents", "ForeverCompanion");
@@ -95,6 +96,13 @@ Source marks (keep them subtle):
 - Don't mark advice, opinions, or the player's own plans and profile. Don't repeat a mark on every line of a list when one source covers the whole list: mark the list's lead-in once.
 - ◈ = something the player told you in this conversation that's newer than the snapshot.
 - The first time marks appear in a conversation, end the reply with this key in italics: *◆ your game · ◈ you told me · ◇ looked up · ○ unconfirmed for Forever*
+Problems and known issues:
+- Tell a bug in the companion apart from a data gap. A bug: the companion contradicts the player's own game (wrong talent, wrong level, a snapshot that's clearly wrong, a tool error). A data gap: the wiki or Classic knowledge doesn't match Forever. Data gaps are never reported: save what the player found as a note or their own hint instead.
+- For a bug: first call known_issues with a few words describing it. If a match exists, say it's known, give the 👍 link and any workaround, and don't offer a new report. Only if nothing matches, offer once to draft a report with draft_problem_report. If they say no, don't offer again for that problem in this conversation. Never interrupt help they've asked for to do this; mention it at the end.
+- Never post, vote or submit anything yourself. Reporting and upvoting always need the player, signed in to GitHub. Tell them the report will be public.
+- get_character may include known_issues: mention one only when it's relevant to what the player is doing.
+- get_character may include events from the in-game calendar: mention them when they start soon or relate to something in the player's bags or quests.
+
 - The companion only advises. Never suggest anything that automates play, reads the running game, buys gold or acts on the auction house.
 `.trim();
 
@@ -140,9 +148,11 @@ server.registerTool(
   async ({ character }) => {
     const ctx = context(character);
     if (!ctx.char) return noSnapshot(ctx, character);
+    const known = CHECK_UPDATES ? await Promise.race([topIssues(DATA_DIR, 3).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]) : null;
     return text({
       notices: await notices(),
       setup: setupPrompts(ctx.profile, ctx.charProfile, ctx.char.name),
+      known_issues: known?.length ? known.map((k) => `${k.title} (${k.upvotes} 👍)`) : undefined,
       ...summarise(ctx.char, ctx.charProfile),
       reminders: reminders(ctx.char, ctx.charProfile),
       other_characters: ctx.characters.filter((c) => c !== ctx.char).map((c) => c.name),
@@ -302,6 +312,56 @@ server.registerTool(
     const ctx = context(a.character);
     if (!ctx.char) return noSnapshot(ctx, a.character);
     return text({ freshness: freshness(ctx.char), ...(await beforeYouGo(a, { char: ctx.char, wiki })) });
+  }
+);
+
+server.registerTool(
+  "known_issues",
+  {
+    title: "Known issues",
+    description:
+      "Search the companion's open problem reports on GitHub, or list the most upvoted ones. Use before offering to report a problem, so duplicates become upvotes.",
+    inputSchema: { query: z.string().optional().describe("A few words describing the problem. Leave empty for the most upvoted.") },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ query }) => {
+    try {
+      const items = query ? await searchIssues(query) : await topIssues(DATA_DIR, 8);
+      return text({
+        query: query || null,
+        issues: items,
+        how_to_use: items.length
+          ? "If one matches the player's problem: say it's known, share its link and invite a 👍 (they need to be signed in to GitHub). Don't offer a new report."
+          : "No matching issue. If it's clearly a bug in the companion, offer once to draft a report.",
+        all_issues: `https://github.com/${REPO_SLUG}/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc`,
+      });
+    } catch (e) {
+      return text({ problem: `Couldn't reach GitHub (${e.message}).` });
+    }
+  }
+);
+
+server.registerTool(
+  "draft_problem_report",
+  {
+    title: "Draft a problem report",
+    description:
+      "Build a prefilled GitHub issue link for a bug in the companion, with version and game-support details attached. The player opens it, checks it and submits it themselves. Only use after known_issues found no match and the player said yes.",
+    inputSchema: {
+      summary: z.string().describe("One-line title, e.g. '/ding suggests the wrong talent at level 13'."),
+      what_happened: z.string().describe("What the companion did, in plain words."),
+      expected: z.string().describe("What should have happened."),
+      character: z.string().optional(),
+    },
+  },
+  async (a) => {
+    const ctx = context(a.character);
+    const diag = diagnostics(ctx.char, addonStatus);
+    return text({
+      link: reportLink({ ...a, diagnostics: diag }),
+      included_details: diag,
+      how_to_use: "Give the link in one line. Say it opens a public GitHub issue they can check and edit before submitting, and that it includes version details but no character name.",
+    });
   }
 );
 

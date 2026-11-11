@@ -5,7 +5,7 @@
 -- to its SavedVariables file when you log out or type /reload.
 
 local ADDON = ...
-local VERSION = "1.6.0"
+local VERSION = "1.7.0"
 
 ForeverCompanionDB = ForeverCompanionDB or {}
 
@@ -492,6 +492,39 @@ local function quests(s)
   s.completedQuests = done
 end
 
+-- Upcoming events from the in-game calendar (holidays, Darkmoon Faire and
+-- the like), today and the next two weeks.
+local function calendar(s)
+  if not (C_Calendar and C_Calendar.GetNumDayEvents and C_Calendar.GetDayEvent) then return end
+  local now = C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime and try(C_DateAndTime.GetCurrentCalendarTime)
+  if type(now) ~= "table" then return end
+  if C_Calendar.SetAbsMonth then try(C_Calendar.SetAbsMonth, now.month, now.year) end
+  local function stamp(t)
+    if type(t) ~= "table" then return nil end
+    return string.format("%04d-%02d-%02d %02d:%02d", t.year or 0, t.month or 0, t.monthDay or 0, t.hour or 0, t.minute or 0)
+  end
+  local seen, out = {}, {}
+  local daysInMonth = (C_Calendar.GetMonthInfo and (try(C_Calendar.GetMonthInfo, 0) or {}).numDays) or 31
+  for offset = 0, 14 do
+    local day, monthOffset = now.monthDay + offset, 0
+    if day > daysInMonth then day, monthOffset = day - daysInMonth, 1 end
+    for i = 1, (try(C_Calendar.GetNumDayEvents, monthOffset, day) or 0) do
+      local e = try(C_Calendar.GetDayEvent, monthOffset, day, i)
+      if type(e) == "table" and e.title and not seen[e.title] then
+        seen[e.title] = true
+        table.insert(out, {
+          title = clean(e.title),
+          type = clean(e.calendarType),
+          starts = stamp(e.startTime),
+          ends = stamp(e.endTime),
+        })
+      end
+    end
+  end
+  s.events = out
+  s.eventsCheckedAt = stamp(now)
+end
+
 local function apiCheck(s)
   local a = {}
   a.GetNumTalentTabs = GetNumTalentTabs and (try(GetNumTalentTabs) or "error") or "missing"
@@ -504,6 +537,8 @@ local function apiCheck(s)
   a.GetQuestsOnMap = (C_QuestLog and C_QuestLog.GetQuestsOnMap) and "present" or "missing"
   a.QuestPOIGetIconInfo = QuestPOIGetIconInfo and "present" or "missing"
   a.GetProfessions = GetProfessions and "present" or "missing"
+  a.C_Calendar = C_Calendar and "present" or "missing"
+  a.eventsFound = type(s.events) == "table" and #s.events or 0
   a.traits = s.traitsCheck
   a.keptFromEarlier = s.kept
   local pins = 0
@@ -544,7 +579,7 @@ local function snapshot(reason, force)
   lastSnapshot = now
 
   local s = { addonVersion = VERSION, savedAt = now, reason = reason }
-  for _, section in ipairs({ basics, location, talents, gear, bags, skills, spells, reputations, quests, apiCheck }) do
+  for _, section in ipairs({ basics, location, talents, gear, bags, skills, spells, reputations, quests, calendar, apiCheck }) do
     local ok = pcall(section, s)
     if not ok then s.partial = true end
   end
@@ -557,7 +592,7 @@ local function snapshot(reason, force)
   if type(prev) == "table" and prev.name == s.name then
     local kept = {}
     local function empty(v) return v == nil or (type(v) == "table" and next(v) == nil) end
-    for _, k in ipairs({ "gear", "bags", "skills", "talents", "spells", "reputations", "quests", "completedQuests" }) do
+    for _, k in ipairs({ "gear", "bags", "skills", "talents", "spells", "reputations", "quests", "completedQuests", "events" }) do
       if empty(s[k]) and not empty(prev[k]) then s[k] = prev[k]; table.insert(kept, k) end
     end
     if empty(s.talents and s.talents[1] and s.talents[1].talents) and not empty(prev.talents) then
@@ -582,6 +617,8 @@ local function snapshot(reason, force)
           q.objectiveText = q.objectiveText or o.objectiveText
           q.level = q.level or o.level
           if empty(q.objectives) then q.objectives = o.objectives end
+          -- At logout the game can report finished quests as unfinished.
+          if o.complete and not q.complete and reason == "logout" then q.complete = true end
         end
       end
     end
@@ -608,8 +645,28 @@ frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("QUEST_TURNED_IN")
 frame:RegisterEvent("QUEST_ACCEPTED")
 frame:RegisterEvent("PLAYER_LOGOUT")
+frame:RegisterEvent("CHAT_MSG_SYSTEM")
 
-frame:SetScript("OnEvent", function(_, event)
+-- Server restart or shutdown warnings: save straight away, so forgetting to
+-- log out before a restart doesn't matter.
+local function isShutdownWarning(msg)
+  if type(msg) ~= "string" then return false end
+  local m = msg:lower()
+  return (m:find("shutdown") or m:find("restart") or m:find("shut down")) and (m:find("server") or m:find("realm") or m:find(" in ")) and true or false
+end
+local lastShutdownNote = 0
+
+frame:SetScript("OnEvent", function(_, event, msg)
+  if event == "CHAT_MSG_SYSTEM" then
+    if isShutdownWarning(msg) and snapshot("shutdown", true) and time() - lastShutdownNote > 300 then
+      lastShutdownNote = time()
+      print("|cff9fd3ffCompanion:|r Server restart coming. Saved, so Claude's up to date.")
+    end
+    return
+  end
+  if event == "PLAYER_ENTERING_WORLD" and C_Calendar and C_Calendar.OpenCalendar then
+    pcall(C_Calendar.OpenCalendar) -- asks the server for this month's events
+  end
   if event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" or event == "PLAYER_ENTERING_WORLD" then
     pcall(recordVisit)
   end

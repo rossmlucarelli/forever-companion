@@ -1,0 +1,30 @@
+name: Problem report
+description: Something in Forever Companion didn't work as it should. Please check the open issues first; if yours is there, give it a 👍 instead.
+title: "[Problem] "
+labels: ["problem"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The most 👍'd issues get fixed first, so if someone has already reported this, a 👍 on theirs helps more than a new report.
+
+        This report is public. Don't include anything you wouldn't want others to see.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What the companion did, in your own words.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Details
+      description: Filled in by Claude when it drafts the report (versions and which game features the addon could read). No character name. Otherwise, ask Claude to "check the Forever Companion status" and paste the versions.
+      render: text
